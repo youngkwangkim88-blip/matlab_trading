@@ -2,7 +2,7 @@
 % 최적화 결과(opt_results_*_portfolio.xlsx)에서 상위 5개 파라미터를 다시 실행하여
 % Train/Val 성능과 EquityCurve를 저장합니다.
 
-clear; close all; clc;
+% clear; close all; clc;
 
 panelFile = "kospi_top100_ohlc_30y.csv";  % <-- 변경
 symbol    = "005930";
@@ -14,8 +14,8 @@ startDate = trainEnd - calyears(5) + days(1);
 
 % split (ex: last 1y as validation)
 % valMonths = 12;
-valStart  = trainEnd + days(1);
-endDate  = valStart + days(365);
+valStart  = datetime(2016,12,31);
+endDate  = datetime(2020,12,31);
 
 % ---- load results ----
 fileOff = "opt_results_samsung_5y_MACD_OFF_portfolio.xlsx";
@@ -32,7 +32,7 @@ T1 = T1(1:min(TopN,height(T1)),:);
 T2 = T2(1:min(TopN,height(T2)),:);
 
 % ---- DM & spec ----
-dm = ticker_data_manager(panelFile, symbol, startDate, endDate);
+dm = ticker_data_manager(panelFile, symbol, valStart, trainEnd);
 
 specBase = instrument_spec(symbol, "KRX_STOCK", ...
     "Multiplier", 1.0, ...
@@ -50,23 +50,23 @@ outRows = table();
 
 % Helper: run one
 runOne = @(hp, winStart, winEnd, tag) run_one_portfolio(dm, specBase, hp, initialCapital, winStart, winEnd, tag);
-
+% 
 % ---- evaluate OFF ----
-for i=1:height(T1)
-    hp = jsondecode(T1.ParamsJson{i});
-
-    rTr = runOne(hp, startDate, trainEnd, sprintf("OFF_TRAIN_%02d",i));
-    rVa = runOne(hp, valStart,  endDate,  sprintf("OFF_VAL_%02d",i));
-
-    outRows = [outRows; make_row("MACD_OFF", i, hp, rTr, rVa)]; %#ok<AGROW>
-end
+% for i=1:height(T1)
+%     hp = jsondecode(T1.ParamsJson{i});
+% 
+%     rTr = runOne(hp, startDate, trainEnd, sprintf("OFF_TRAIN_%02d",i));
+%     rVa = runOne(hp, valStart,  endDate,  sprintf("OFF_VAL_%02d",i));
+% 
+%     outRows = [outRows; make_row("MACD_OFF", i, hp, rTr, rVa)]; %#ok<AGROW>
+% end
 
 % ---- evaluate ALLOWED ----
 for i=1:height(T2)
     hp = jsondecode(T2.ParamsJson{i});
-
-    rTr = runOne(hp, startDate, trainEnd, sprintf("ON_TRAIN_%02d",i));
-    rVa = runOne(hp, valStart,  endDate,  sprintf("ON_VAL_%02d",i));
+% run_one_portfolio(dm,  initialCapital, params, spec, startDate, endDate)
+    rTr = run_one_portfolio(dm,  initialCapital,hp, specBase, startDate, trainEnd);
+    rVa = run_one_portfolio(dm,  initialCapital,hp, specBase, valStart,  endDate);
 
     outRows = [outRows; make_row("MACD_ALLOWED", i, hp, rTr, rVa)]; %#ok<AGROW>
 end
@@ -149,10 +149,10 @@ pOn  = decode_params_row(bestOn);
 if exist('panelFile','var') ~= 1
     panelFile = "kospi_top100_ohlc_30y.csv"; % <- 필요하면 여기 직접 지정
 end
-if exist('sd','var') ~= 1, sd = valStart; end
-if exist('ed','var') ~= 1, ed = endDate; end
+sd = valStart; 
+ed = endDate; 
 if exist('symbol','var') ~= 1, symbol = "005930"; end
-if exist('initialCapital','var') ~= 1, initialCapital = 1e9; end
+initialCapital = 1e9; 
 
 % -------- 4) OFF best 재실행 + plot --------
 fprintf("\n[VIS] Re-run BEST OFF...\n");
@@ -394,13 +394,13 @@ function params = sample_params(S)
     end
 end
 
-function [rep, eqTT] = run_one_portfolio(panelFile, ticker, initialCapital, params, spec, startDate, endDate, ddPenalty, useLogEquity)
+function [rep, eqTT] = run_one_portfolio(dm, initialCapital, params, spec, startDate, endDate)
 
     assert(exist('portfolio_master','class') == 8, "portfolio_master class not found in MATLAB path");
     assert(exist('portfolio_backtest_engine','class') == 8, "portfolio_backtest_engine class not found in MATLAB path");
 
     % --- Build DM (trimmed) ---
-    dm = ticker_data_manager(panelFile, ticker, startDate, endDate);
+    % dm = ticker_data_manager(panelFile, ticker, startDate, endDate);
 
     % --- Build trader ---
     tr = ticker_trader(dm, 0, true);
@@ -452,11 +452,6 @@ function [rep, eqTT] = run_one_portfolio(panelFile, ticker, initialCapital, para
         rep.Stops  = height(tr.StopLog);
     end
 
-    if useLogEquity
-        rep.Score = log(max(rep.EquityEnd, 1)) - ddPenalty * rep.MaxDD;
-    else
-        rep.Score = rep.TotRet - ddPenalty * rep.MaxDD;
-    end
 end
 
 function apply_params_compat(tr, params)

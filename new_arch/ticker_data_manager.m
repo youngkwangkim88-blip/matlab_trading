@@ -52,8 +52,8 @@ classdef ticker_data_manager < handle
             if nargin < 2
                 error("ticker_data_manager:ctor","panelCsvFile and ticker are required.");
             end
-            panelCsvFile = string(panelCsvFile);
-            ticker = string(ticker);
+            %     panelCsvFile = string(panelCsvFile);
+            % ticker = string(ticker);
 
             this.PanelFile = panelCsvFile;
 
